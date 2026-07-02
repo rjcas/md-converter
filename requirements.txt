@@ -1,0 +1,7 @@
+markitdown[pdf,docx]
+tiktoken
+python-docx
+pdfplumber
+fastapi
+uvicorn[standard]
+python-multipart

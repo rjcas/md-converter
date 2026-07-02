@@ -1,0 +1,24 @@
+# Blueprint de Render — Infrastructure as Code.
+# Con este archivo en la raíz del repo, Render detecta el servicio
+# automáticamente al conectar el repo ("New +" -> "Blueprint").
+# Evita configurar todo a mano en el dashboard.
+
+services:
+  - type: web
+    name: md-converter-api
+    runtime: python
+    plan: free
+    branch: main          # ajustar si tu rama principal se llama distinto
+    buildCommand: >
+      pip install -r requirements.txt &&
+      python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+    startCommand: uvicorn api.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: TIKTOKEN_CACHE_DIR
+        value: /opt/render/project/.tiktoken_cache
+      # CORS: reemplazar por el dominio real de Netlify una vez que lo tengas
+      - key: ALLOWED_ORIGIN
+        value: "*"
