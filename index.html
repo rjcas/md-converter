@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOC → MD · Conversor optimizado para IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --navy: #0B2545;
+    --navy-2: #16324F;
+    --grid: rgba(120,180,210,0.16);
+    --grid-strong: rgba(148,201,227,0.28);
+    --paper: #EAF2F8;
+    --paper-dim: #A9C2D6;
+    --amber: #E8A33D;
+    --teal: #4FB0A5;
+    --danger: #E2694B;
+    --radius: 3px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/32px 32px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/32px 32px,
+      var(--navy);
+    color: var(--paper);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    line-height:1.5;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  a{ color: var(--amber); }
+  :focus-visible{ outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .wrap{ max-width: 820px; margin: 0 auto; padding: 48px 20px 80px; }
+
+  /* --- Header / titleblock --- */
+  .titleblock{
+    border: 1px solid var(--grid-strong);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 40px;
+    position: relative;
+  }
+  .titleblock::before, .titleblock::after,
+  .titleblock .tick-br, .titleblock .tick-bl{
+    content:""; position:absolute; width:10px; height:10px;
+    border-color: var(--amber); border-style: solid; border-width: 0;
+  }
+  .titleblock::before{ top:-1px; left:-1px; border-top-width:2px; border-left-width:2px; }
+  .titleblock::after{ top:-1px; right:-1px; border-top-width:2px; border-right-width:2px; }
+  .titleblock .tick-bl{ bottom:-1px; left:-1px; border-bottom-width:2px; border-left-width:2px; }
+  .titleblock .tick-br{ bottom:-1px; right:-1px; border-bottom-width:2px; border-right-width:2px; }
+
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--amber); margin: 0 0 10px;
+  }
+  h1{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.01em;
+    font-size: clamp(28px, 5vw, 40px);
+    margin: 0 0 12px; line-height: 1.05;
+  }
+  .lede{ color: var(--paper-dim); max-width: 56ch; margin: 0; font-size: 15px; }
+
+  .specs{
+    display:flex; gap: 24px; margin-top: 20px; padding-top: 16px;
+    border-top: 1px solid var(--grid-strong); flex-wrap: wrap;
+  }
+  .spec{ font-family:'IBM Plex Mono', monospace; font-size: 11px; color: var(--paper-dim); }
+  .spec b{ color: var(--paper); display:block; font-size: 13px; }
+
+  /* --- Drop zone --- */
+  .dropzone{
+    border: 2px dashed var(--grid-strong);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+    background: rgba(234,242,248,0.02);
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color: var(--amber);
+    background: rgba(232,163,61,0.06);
+  }
+  .dropzone .dz-title{ font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+  .dropzone .dz-sub{ color: var(--paper-dim); font-size: 13px; margin: 0 0 18px; }
+  .btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
+    background: var(--amber); color: var(--navy); border: none;
+    padding: 12px 22px; border-radius: var(--radius); cursor: pointer;
+    font-weight: 600;
+  }
+  .btn:hover{ background: #f0b158; }
+  .btn:disabled{ background: var(--grid-strong); color: var(--paper-dim); cursor:not-allowed; }
+  .btn.ghost{
+    background: transparent; color: var(--paper); border: 1px solid var(--grid-strong);
+  }
+  .btn.ghost:hover{ border-color: var(--amber); color: var(--amber); }
+  input[type=file]{ display:none; }
+
+  /* --- Revision steps --- */
+  .revs{
+    display:flex; gap: 16px; margin: 36px 0 8px; flex-wrap: wrap;
+    font-family:'IBM Plex Mono', monospace; font-size: 11px; color: var(--paper-dim);
+  }
+  .revs span b{ color: var(--amber); }
+
+  /* --- File results --- */
+  .files{ margin-top: 24px; display:flex; flex-direction:column; gap: 10px; }
+  .file-card{
+    border: 1px solid var(--grid-strong); border-radius: var(--radius);
+    padding: 14px 16px; background: rgba(234,242,248,0.02);
+  }
+  .file-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .file-name{ font-family:'IBM Plex Mono', monospace; font-size: 13px; word-break: break-all; }
+  .file-status{ font-size: 11px; letter-spacing:.04em; text-transform:uppercase; font-family:'IBM Plex Mono', monospace; }
+  .file-status.ok{ color: var(--teal); }
+  .file-status.err{ color: var(--danger); }
+  .file-status.pending{ color: var(--paper-dim); }
+
+  .gauge{ margin-top:10px; }
+  .gauge-bar{ height:6px; border-radius:3px; background: var(--grid-strong); overflow:hidden; }
+  .gauge-fill{ height:100%; background: var(--teal); width:0%; transition: width .5s ease; }
+  .gauge-nums{
+    display:flex; justify-content:space-between; margin-top:6px;
+    font-family:'IBM Plex Mono', monospace; font-size: 11px; color: var(--paper-dim);
+  }
+  .gauge-nums b{ color: var(--paper); }
+  .err-detail{ color: var(--danger); font-size:12px; margin-top:8px; font-family:'IBM Plex Mono', monospace; }
+  .dl-link{ font-family:'IBM Plex Mono', monospace; font-size: 12px; }
+
+  /* --- Totals --- */
+  .totals{
+    margin-top: 28px; padding: 20px; border: 1px solid var(--amber);
+    border-radius: var(--radius); display:flex; align-items:center;
+    justify-content:space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .totals .label{ font-family:'IBM Plex Mono', monospace; font-size: 11px; text-transform:uppercase; letter-spacing:.08em; color: var(--paper-dim); }
+  .totals .number{ font-family:'IBM Plex Sans Condensed', sans-serif; font-weight:700; font-size: 34px; color: var(--amber); }
+
+  .config-note{
+    margin-top: 40px; font-size: 12px; color: var(--paper-dim);
+    border-top: 1px solid var(--grid-strong); padding-top: 16px;
+  }
+  .config-note code{ background: rgba(234,242,248,0.06); padding: 1px 5px; border-radius: 2px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .gauge-fill{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="titleblock">
+    <span class="tick-br"></span><span class="tick-bl"></span>
+    <p class="eyebrow">DOC &rarr; MD / v1.0</p>
+    <h1>Convertí PDF y DOCX a Markdown liviano</h1>
+    <p class="lede">Motor <code class="mono">markitdown</code> con limpieza automática de ruido — headers repetidos, whitespace sobrante — para que tus documentos ocupen menos tokens al entrar a un LLM.</p>
+    <div class="specs">
+      <div class="spec"><b>.PDF / .DOCX</b>entrada</div>
+      <div class="spec"><b>.MD</b>salida</div>
+      <div class="spec"><b>Lote</b>múltiples archivos</div>
+      <div class="spec"><b>cl100k_base</b>medición de tokens</div>
+    </div>
+  </header>
+
+  <div class="revs">
+    <span><b>REV 01</b> — subir archivos</span>
+    <span><b>REV 02</b> — convertir y optimizar</span>
+    <span><b>REV 03</b> — descargar .md</span>
+  </div>
+
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Subir archivos PDF o DOCX">
+    <p class="dz-title">Arrastrá tus archivos acá</p>
+    <p class="dz-sub">o elegilos manualmente — .pdf y .docx, podés subir varios a la vez</p>
+    <button type="button" class="btn" id="pick-btn">Seleccionar archivos</button>
+    <input type="file" id="file-input" multiple accept=".pdf,.docx">
+  </div>
+
+  <div class="files" id="files"></div>
+
+  <div class="totals" id="totals" style="display:none">
+    <div>
+      <div class="label">Tokens ahorrados en total</div>
+      <div class="number mono" id="total-tokens">0</div>
+    </div>
+    <button type="button" class="btn ghost" id="download-all" style="display:none">Descargar todo (.zip)</button>
+  </div>
+
+  <p class="config-note">
+    Backend configurado en <code id="api-base-display">—</code>. Si estás corriendo esto por primera vez,
+    editá la constante <code>API_BASE_URL</code> al principio del <code>&lt;script&gt;</code> de este archivo
+    con la URL de tu backend desplegado (Render/Railway/Fly.io/HF Spaces).
+  </p>
+</div>
+
+<script>
+// ── Configuración ──────────────────────────────────────────────
+// Reemplazar por la URL pública del backend FastAPI una vez desplegado.
+// Ejemplo: 'https://mi-conversor.onrender.com'
+const API_BASE_URL = 'http://localhost:8000';
+const MAX_CONCURRENT = 3; // llamadas paralelas al backend
+
+document.getElementById('api-base-display').textContent = API_BASE_URL;
+
+const dropzone   = document.getElementById('dropzone');
+const fileInput  = document.getElementById('file-input');
+const pickBtn    = document.getElementById('pick-btn');
+const filesEl    = document.getElementById('files');
+const totalsEl   = document.getElementById('totals');
+const totalTokEl = document.getElementById('total-tokens');
+const downloadAllBtn = document.getElementById('download-all');
+
+let entries = []; // { id, file, status, card, tokenReport, blob }
+
+pickBtn.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('click', (e) => { if (e.target === dropzone) fileInput.click(); });
+dropzone.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
+
+['dragenter','dragover'].forEach(evt =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag'); })
+);
+['dragleave','drop'].forEach(evt =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('drag'); })
+);
+dropzone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+function handleFiles(fileList) {
+  const accepted = Array.from(fileList).filter(f => /\.(pdf|docx)$/i.test(f.name));
+  if (accepted.length === 0) return;
+  accepted.forEach(queueFile);
+  processQueue();
+}
+
+function queueFile(file) {
+  const id = crypto.randomUUID();
+  const card = renderCard(id, file.name);
+  filesEl.appendChild(card);
+  entries.push({ id, file, status: 'pending', card, tokenReport: null, blob: null });
+}
+
+function renderCard(id, name) {
+  const div = document.createElement('div');
+  div.className = 'file-card';
+  div.id = `card-${id}`;
+  div.innerHTML = `
+    <div class="file-row">
+      <span class="file-name">${escapeHtml(name)}</span>
+      <span class="file-status pending" data-role="status">en cola</span>
+    </div>
+    <div data-role="body"></div>
+  `;
+  return div;
+}
+
+async function processQueue() {
+  const pending = entries.filter(e => e.status === 'pending');
+  let i = 0;
+  async function worker() {
+    while (i < pending.length) {
+      const entry = pending[i++];
+      await convertOne(entry);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT, pending.length) }, worker));
+  updateTotals();
+}
+
+async function convertOne(entry) {
+  setStatus(entry, 'pending', 'convirtiendo…');
+  const formData = new FormData();
+  formData.append('file', entry.file);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/convert`, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `HTTP ${res.status}`);
+    }
+    const reportHeader = res.headers.get('X-Token-Report');
+    const report = reportHeader ? JSON.parse(reportHeader) : null;
+    const blob = await res.blob();
+
+    entry.status = 'ok';
+    entry.tokenReport = report;
+    entry.blob = blob;
+    renderSuccess(entry, report, blob);
+  } catch (err) {
+    entry.status = 'error';
+    renderError(entry, err.message || 'Error desconocido');
+  }
+}
+
+function renderSuccess(entry, report, blob) {
+  const card = entry.card;
+  setStatus(entry, 'ok', 'listo');
+  const url = URL.createObjectURL(blob);
+  const outName = entry.file.name.replace(/\.(pdf|docx)$/i, '.md');
+  const pct = report ? report.savings_percent : 0;
+  const body = card.querySelector('[data-role="body"]');
+  body.innerHTML = `
+    <div class="gauge">
+      <div class="gauge-bar"><div class="gauge-fill" style="width:${Math.min(pct,100)}%"></div></div>
+      <div class="gauge-nums">
+        <span><b>${report ? report.raw_tokens : '—'}</b> → <b>${report ? report.optimized_tokens : '—'}</b> tokens</span>
+        <span>-${pct}%</span>
+      </div>
+    </div>
+    <p class="dl-link"><a href="${url}" download="${escapeHtml(outName)}">↓ Descargar ${escapeHtml(outName)}</a></p>
+  `;
+}
+
+function renderError(entry, message) {
+  setStatus(entry, 'err', 'error');
+  const body = entry.card.querySelector('[data-role="body"]');
+  body.innerHTML = `<p class="err-detail">${escapeHtml(message)}</p>`;
+}
+
+function setStatus(entry, cls, text) {
+  const el = entry.card.querySelector('[data-role="status"]');
+  el.className = `file-status ${cls}`;
+  el.textContent = text;
+}
+
+function updateTotals() {
+  const succeeded = entries.filter(e => e.status === 'ok' && e.tokenReport);
+  if (succeeded.length === 0) { totalsEl.style.display = 'none'; return; }
+  const total = succeeded.reduce((sum, e) => sum + (e.tokenReport.tokens_saved || 0), 0);
+  totalTokEl.textContent = total.toLocaleString('es-AR');
+  totalsEl.style.display = 'flex';
+  downloadAllBtn.style.display = succeeded.length > 1 ? 'inline-block' : 'none';
+}
+
+downloadAllBtn.addEventListener('click', async () => {
+  const succeeded = entries.filter(e => e.status === 'ok' && e.blob);
+  if (succeeded.length === 0 || typeof JSZip === 'undefined') return;
+  const zip = new JSZip();
+  for (const e of succeeded) {
+    const outName = e.file.name.replace(/\.(pdf|docx)$/i, '.md');
+    zip.file(outName, e.blob);
+  }
+  const content = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(content);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'markdown_convertido.zip';
+  document.body.appendChild(a); a.click(); a.remove();
+});
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>

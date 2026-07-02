@@ -1,0 +1,12 @@
+# Sitio 100% estático — no hay build step, no hay funciones.
+# El backend (FastAPI, core/, api/app.py) se despliega APARTE en un host
+# con runtime Python real (Render/Railway/Fly.io/HF Spaces). Ver README.md.
+
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
