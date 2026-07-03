@@ -23,6 +23,7 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from core import ConversionPipeline, BatchProcessor
 from core.converter import SUPPORTED_EXTENSIONS
@@ -57,7 +58,11 @@ async def convert_single(file: UploadFile = File(...)) -> Response:
         tmp_path.write_bytes(await file.read())
 
         pipeline = ConversionPipeline()
-        result = pipeline.run(tmp_path, output_dir=tmp)
+        # run_in_threadpool: la conversión es CPU-bound y síncrona. Sin esto,
+        # bloquea el único event loop de uvicorn y Render ve el healthcheck
+        # colgado durante toda la conversión (causa real del "server failure"
+        # reportado por Render en instancias free tier de 0.1 CPU).
+        result = await run_in_threadpool(pipeline.run, tmp_path, tmp)
 
         if not result.success:
             raise HTTPException(422, f"[{result.error_type}] {result.error_detail}")
@@ -89,7 +94,9 @@ async def convert_batch(files: list[UploadFile] = File(...)) -> Response:
         if not saved_paths:
             raise HTTPException(400, "Ningún archivo tiene formato soportado (.pdf/.docx)")
 
-        report = BatchProcessor(max_workers=4).process(saved_paths, tmp_out)
+        report = await run_in_threadpool(
+            BatchProcessor(max_workers=4).process, saved_paths, tmp_out
+        )
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:

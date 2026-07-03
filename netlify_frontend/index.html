@@ -153,6 +153,12 @@
   }
   .config-note code{ background: rgba(234,242,248,0.06); padding: 1px 5px; border-radius: 2px; }
 
+  .wake-banner{
+    margin-top: 16px; padding: 12px 16px; border-radius: var(--radius);
+    border: 1px solid var(--amber); background: rgba(232,163,61,0.08);
+    color: var(--amber); font-family:'IBM Plex Mono', monospace; font-size: 12px;
+  }
+
   @media (prefers-reduced-motion: reduce){
     .gauge-fill{ transition:none; }
   }
@@ -208,8 +214,8 @@
 // ── Configuración ──────────────────────────────────────────────
 // Reemplazar por la URL pública del backend FastAPI una vez desplegado.
 // Ejemplo: 'https://mi-conversor.onrender.com'
-const API_BASE_URL = 'http://localhost:8000';
-const MAX_CONCURRENT = 3; // llamadas paralelas al backend
+const API_BASE_URL = 'https://md-converter-api-wyeh.onrender.com';
+const MAX_CONCURRENT = 1; // free tier de Render: 0.1 CPU compartida, evitar saturar con paralelismo
 
 document.getElementById('api-base-display').textContent = API_BASE_URL;
 
@@ -245,6 +251,40 @@ function handleFiles(fileList) {
   processQueue();
 }
 
+let backendAwake = false;
+
+async function ensureBackendAwake() {
+  if (backendAwake) return;
+  showWakingBanner(true);
+  const start = Date.now();
+  const maxWaitMs = 90000; // free tier de Render: cold start puede tardar hasta ~60-90s
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/health`, { cache: 'no-store' });
+      if (res.ok) { backendAwake = true; showWakingBanner(false); return; }
+    } catch (_) {
+      // servidor todavía no responde: seguir reintentando
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  showWakingBanner(false); // se agotó el tiempo: seguimos igual, que falle explícito si hace falta
+}
+
+function showWakingBanner(visible) {
+  let banner = document.getElementById('wake-banner');
+  if (visible) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'wake-banner';
+      banner.className = 'wake-banner';
+      banner.innerHTML = '⏳ Despertando el servidor (puede tardar hasta un minuto la primera vez)…';
+      dropzone.insertAdjacentElement('afterend', banner);
+    }
+  } else if (banner) {
+    banner.remove();
+  }
+}
+
 function queueFile(file) {
   const id = crypto.randomUUID();
   const card = renderCard(id, file.name);
@@ -267,6 +307,7 @@ function renderCard(id, name) {
 }
 
 async function processQueue() {
+  await ensureBackendAwake();
   const pending = entries.filter(e => e.status === 'pending');
   let i = 0;
   async function worker() {
